@@ -162,14 +162,23 @@ def fill_polygon_holes(input_gdf, output_file, dissolve_by=None):
     # Save the result to a new file
     dissolved_polygons.to_file(output_file)
 
+
 # Load your GeoDataFrames
-target_fn = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\LPM\Catchment Delineation\Summary_Stats_JTM_cleaned.shp"
-eraser_fn = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\LPM\Channel Delineation\LPM_Channel_10m_Section.shp"
-target_layer = gpd.read_file(target_fn)
-eraser_layer = gpd.read_file(eraser_fn)
-out_file = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\LPM\Catchment Delineation\Summary_Stats_JTM_filled_v2.shp"
-# Perform the erase operation
-#erased_layer = erase(target_layer, eraser_layer)
-filled_holes = fill_polygon_holes(target_layer, out_file)
-# Optionally, save the result to a new shapefile
-#filled_holes.to_file(r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\LPM\Catchment Delineation\Summary_Stats_JTM_filled_v2.shp")
+target_fn_list = [
+                    r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\LPM Hillslope Stats.gpkg"
+
+]
+
+eraser_fn_list = [
+                r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\LPM Channel Stats.gpkg"
+]
+
+for target_fn, eraser_fn in zip(target_fn_list, eraser_fn_list):
+    target_layer = gpd.read_file(target_fn)
+    eraser_layer = gpd.read_file(eraser_fn)
+    out_dir = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Erased Hillslopes"
+    # Perform the erase operation
+    erased_layer = erase(target_layer, eraser_layer)
+    
+    #save gdf to file
+    erased_layer.to_file(out_dir + "\\" + target_fn.split("\\")[-1].replace("Stats", "Stats Clipped"), driver='GPKG')
