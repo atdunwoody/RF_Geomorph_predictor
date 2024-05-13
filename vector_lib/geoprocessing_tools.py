@@ -2,6 +2,10 @@ import geopandas as gpd
 from shapely.geometry import Polygon,MultiPolygon
 from shapely.ops import unary_union, cascaded_union
 from shapely.geometry import box
+from shapely.geometry import LineString, MultiLineString
+import numpy as np
+from shapely.geometry import shape, mapping
+import fiona
 
 def erase(target_gdf, eraser_gdf):
     """
@@ -46,38 +50,32 @@ def clip(target_gdf, clipper_gdf):
     
     return clipped_gdf
 
-def multipart_poly_to_single(gdf, method='union'):
+def multipolygon_to_polygon(input_geopackage, output_geopackage):
     """
-    Converts all multipart polygons in a GeoDataFrame into single-part polygons,
-    using either the convex hull or a union of all parts.
+    Convert a multipolygon from a GeoPackage to its exterior outline and save the result to another GeoPackage.
 
-    Parameters:
-    - gdf (GeoDataFrame): A GeoDataFrame containing the geometries to process.
-    - method (str): Method to use for conversion; 'convex' for convex hull, 'union' for exact union.
-
-    Returns:
-    - GeoDataFrame: A new GeoDataFrame with all multipart polygons converted to single-part polygons.
+    Args:
+        input_geopackage (str): Path to the input GeoPackage.
+        layer_name (str): Layer name of the multipolygon in the input GeoPackage.
+        output_geopackage (str): Path to the output GeoPackage.
+        output_layer_name (str): Layer name for the output polygon in the output GeoPackage.
     """
-    def to_single_polygon(geometry):
-        # Check if the geometry is None
-        if geometry is None:
-            return None  # Return None if the geometry is None
-        
-        if geometry.geom_type == 'MultiPolygon':
-            if method == 'convex':
-                # Use the convex hull of all parts
-                return geometry.convex_hull
-            elif method == 'union':
-                # Use a precise union of all parts
-                return unary_union(geometry)
-        elif geometry.geom_type == 'Polygon':
-            return geometry
-        else:
-            return geometry  # Return non-polygon geometries unchanged
+    # Read the multipolygon from the GeoPackage
+    gdf = gpd.read_file(input_geopackage)
+    
+    # Ensure the geometry is a multipolygon
+    if not all(gdf.geometry.type.isin(['MultiPolygon', 'Polygon'])):
+        raise ValueError("All geometries must be (multi)polygons")
+    
+    # Use unary_union to dissolve all polygons into a single outline
+    outline = unary_union(gdf.geometry)
 
-    # Apply the to_single_polygon function to each geometry in the GeoDataFrame
-    gdf['geometry'] = gdf['geometry'].apply(to_single_polygon)
-    return gdf
+    # Create a new GeoDataFrame with the resulting outline
+    result_gdf = gpd.GeoDataFrame(geometry=[outline], crs=gdf.crs)
+
+    # Write the result to the output GeoPackage
+    result_gdf.to_file(output_geopackage, driver='GPKG')
+    return result_gdf
 
 def fill_holes(gdf):
     """
@@ -162,23 +160,50 @@ def fill_polygon_holes(input_gdf, output_file, dissolve_by=None):
     # Save the result to a new file
     dissolved_polygons.to_file(output_file)
 
-
-# Load your GeoDataFrames
-target_fn_list = [
-                    r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\LPM Hillslope Stats.gpkg"
-
-]
-
-eraser_fn_list = [
-                r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\LPM Channel Stats.gpkg"
-]
-
-for target_fn, eraser_fn in zip(target_fn_list, eraser_fn_list):
-    target_layer = gpd.read_file(target_fn)
-    eraser_layer = gpd.read_file(eraser_fn)
-    out_dir = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Erased Hillslopes"
-    # Perform the erase operation
-    erased_layer = erase(target_layer, eraser_layer)
+def create_buffer(gpkg_path, buffer_distance):
+    # Open the GeoPackage with fiona to read the layer
+    with fiona.open(gpkg_path) as src:
+        # Schema of the new GeoPackage (adding buffered geometries)
+        schema = src.schema.copy()
+        schema['geometry'] = 'Polygon'  # Update geometry type if necessary
+        
+        # Create a new GeoPackage for output
+        output_path = gpkg_path.replace('.gpkg', '_shapely_buffered.gpkg')
+        with fiona.open(output_path, 'w', driver='GPKG', schema=schema, crs=src.crs) as dst:
+            # Iterate over all records in the source layer, buffer them, and write to the new file
+            for feature in src:
+                geom = shape(feature['geometry'])
+                buffered_geom = geom.buffer(buffer_distance)
+                
+                # Create new feature with the buffered geometry
+                new_feature = {
+                    'geometry': mapping(buffered_geom),
+                    'properties': feature['properties']
+                }
+                
+                dst.write(new_feature)
     
-    #save gdf to file
-    erased_layer.to_file(out_dir + "\\" + target_fn.split("\\")[-1].replace("Stats", "Stats Clipped"), driver='GPKG')
+    return output_path
+
+
+def main():
+
+    chan_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Test - Slope\LM2 Channel Stats.gpkg"
+    buffer_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Test - Slope\LM2 Centerline_shapely_buffered.gpkg"
+    CL_path = r'Y:\\ATD\\GIS\\East_Troublesome\\Watershed Statistical Analysis\\Watershed Stats\\Test - Slope\\LM2 Centerline.gpkg'
+    perp_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Test - Slope\Buffer as Lines\LM2 Centerline_perpendiculars_100m.gpkg"
+    output_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Test - Slope\Chan Single.gpkg"
+    section_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Test - Slope\LM2 Centerline_shapely_buffered_multipolygon.gpkg"
+    buffer_outline_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Test - Slope\Buffer as Lines\Buffer outline.gpkg"
+    
+    
+    
+    #multi_poly_path = centerline_to_multipolygon(buffer_path, CL_path, length=10, width=200)
+    buffer_gdf = gpd.read_file(buffer_outline_path)
+    perp_gdf = gpd.read_file(perp_path)
+    #clipped_gdf  = clip(perp_gdf, buffer_gdf)
+    #clipped_gdf.to_file(output_path, driver='GPKG')
+
+
+if __name__ == "__main__":
+    main()
