@@ -49,6 +49,11 @@ def quick_shap_eval(model, X_train, X_test, plot_title="", plot = True):
         shap.initjs()  # Initialize JavaScript visualization in Jupyter Notebook/Colab if applicable
     return feature_importance, shap.force_plot(explainer.expected_value, shap_values[0, :], X_test.iloc[0, :])
 
+def calculate_shap_importance(model, X_train, X_test):
+    RANKED_shap, _ = quick_shap_eval(model, X_train, X_test, plot=False)  # Assuming evaluate_model_with_shap is defined
+    return RANKED_shap
+
+
 def evaluate_feature_with_shap(model, X_train, X_test, feature_to_plot, plot_title="", plot=True):
     """
     Evaluate the model using SHAP values to understand feature importance and plot the dependence
@@ -149,7 +154,7 @@ def plot_permutation_importance(model, X_test, y_test, n_repeats=30):
     sns.barplot(x='Importances', y='Features', data=importance_data, xerr=importance_data['Std'], color = 'skyblue', capsize=3)
 
     plt.xlabel('Permutation Importance')
-    plt.title('Feature Importance with Error Bars')
+    plt.title('Permutation Feature Importance')
     plt.show()
 
 def plot_Gini_feature_importances(model, feature_names):
@@ -157,7 +162,7 @@ def plot_Gini_feature_importances(model, feature_names):
     importances = model.feature_importances_
     indices = np.argsort(importances)
     plt.figure(figsize=(10, 6))
-    plt.title('Feature Importances')
+    plt.title('Gini Feature Importances')
     plt.barh(range(len(indices)), importances[indices], color='b', align='center')
     plt.yticks(range(len(indices)), [feature_names[i] for i in indices])
     plt.xlabel('Relative Importance')
@@ -181,9 +186,6 @@ def train_and_evaluate(model, X_train, X_test, y_train, y_test):
     r2, mse, predictions = rfut.evaluate_model(model, X_test, y_test)  # Assuming rfut is defined somewhere
     return {'MSE': mse, 'score': model.score(X_test, y_test)}
 
-def calculate_shap_importance(model, X_train, X_test):
-    RANKED_shap, _ = quick_shap_eval(model, X_train, X_test, plot=False)  # Assuming evaluate_model_with_shap is defined
-    return RANKED_shap
 
 def calculate_rfe_importance(model, X_train, y_train, n_folds = 3):
     rfe = RFECV(estimator=model, step=1, cv=KFold(n_folds), scoring='neg_mean_squared_error')
@@ -261,7 +263,7 @@ def plot_rfe_features(rfe_results, X, color_mapping=None, default_color='skyblue
     plt.title('Feature Rankings by Recursive Feature Elimination with Error Bars')
     plt.show()
 
-def robust_feature_ranking(model, X, y, perform_rfe = True, plot = True):
+def robust_feature_ranking(model, X, y, perform_rfe = True, plot = True, color_mapping = None):
     performance_results = []
     shap_dict = {}
     rfe_dict = []

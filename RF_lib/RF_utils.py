@@ -28,19 +28,13 @@ def remove_outliers(X, y):
     condition = ~((X < (Q1 - 1.5 * IQR)) | (X > (Q3 + 1.5 * IQR))).any(axis=1)
     return X[condition], y[condition]
 
-def quick_train_model(X_train, y_train):
-    #Best parameters: {'max_depth': 18, 'max_features': 'sqrt', 'min_samples_split': 2, 'n_estimators': 350}
-    model = RandomForestRegressor(n_estimators=350, max_features='sqrt', max_depth=18, min_samples_split=2, random_state=42)
-    model.fit(X_train, y_train)
-    return model
-
-def random_hyperparam_opt_XGB(X_train, X_test, y_train, y_test):
+def random_hyperparam_opt_XGB(X_train, y_train):
     # Define the parameter distribution
     param_dist = {
-        'n_estimators': randint(100, 500),  # Adjusted range for more exploration
+        'n_estimators': randint(100, 400),  # Adjusted range for more exploration
         'learning_rate': uniform(0.01, 0.2),  # Adjusted range to focus on more likely beneficial values
         'subsample': uniform(0.5, 0.5),  # Corrected to ensure valid values
-        'max_depth': randint(3, 15),  # Expanded range for depth
+        'max_depth': randint(3, 10),  # Expanded range for depth
         'colsample_bytree': uniform(0.3, 0.7),  # Adjusted for better exploration of feature sampling
         'min_child_weight': randint(1, 10),
         'gamma': uniform(0, 0.5),  # Added gamma for better control of tree growth
@@ -62,23 +56,16 @@ def random_hyperparam_opt_XGB(X_train, X_test, y_train, y_test):
     )
 
     # Fit the model with early stopping
-    random_search.fit(X_train, y_train, eval_set=[(X_test, y_test)], early_stopping_rounds=10, verbose=False)
+    random_search.fit(X_train, y_train, verbose=False)
     
     # Print best parameters and best score
     print("Best parameters:", random_search.best_params_)
     print("Best train score:", -random_search.best_score_)
 
-    # Predict on test set
-    predictions = random_search.predict(X_test)
-    
-    # Calculate RMSE
-    mse = mean_squared_error(y_test, predictions)
-    rmse = mse**0.5
-    print("RMSE on Test set :", rmse)
 
     return random_search.best_estimator_
 
-def random_hyperparam_opt_RF(X_train, X_test, y_train, y_test):
+def random_hyperparam_opt_RF(X_train, y_train):
     # Define the parameter distribution
     param_dist = {
         'n_estimators': randint(100, 1000),  # Number of trees in the forest
@@ -109,17 +96,9 @@ def random_hyperparam_opt_RF(X_train, X_test, y_train, y_test):
     print("Best parameters:", random_search.best_params_)
     print("Best train score:", -random_search.best_score_)
 
-    # Predict on test set
-    predictions = random_search.predict(X_test)
-    
-    # Calculate RMSE
-    mse = mean_squared_error(y_test, predictions)
-    rmse = mse**0.5
-    print("RMSE on Test set :", rmse)
-
     return random_search.best_estimator_
 
-def bayesian_hyperparam_opt_RF(X_train, X_test, y_train, y_test):
+def bayesian_hyperparam_opt_RF(X_train, y_train):
     param_dist = {
         'n_estimators': (100, 1000),  # Continuous range for Bayesian optimization
         'max_features': ['auto', 'sqrt', 'log2'],
@@ -136,10 +115,6 @@ def bayesian_hyperparam_opt_RF(X_train, X_test, y_train, y_test):
     print("Best parameters:", bayes_search.best_params_)
     print("Best train score:", -bayes_search.best_score_)
     
-    predictions = bayes_search.predict(X_test)
-    mse = mean_squared_error(y_test, predictions)
-    rmse = mse**0.5
-    print("RMSE on Test set :", rmse)
 
     return bayes_search.best_estimator_
 
@@ -190,15 +165,15 @@ def evaluate_model(model, X_test, y_test):
     print(f'R^2 Score: {score}')
     return score, mse, predictions
 
-def plot_predictions(y_test, predictions, mean_score):
+def plot_predictions(y_test, predictions, mean_score, field_name):
     df = pd.DataFrame(y_test)
     #name the column y_field
     df['y_test'] = y_test
     df['predictions'] = predictions
     #plot the predictions vs y_test
     plt.scatter(df['y_test'], df['predictions'])
-    plt.xlabel('Actual Normalized Erosion (m)')
-    plt.ylabel('Predicted Normalized Erosion (m)')
+    plt.xlabel(f'Actual {field_name} (m)')
+    plt.ylabel(f'Predicted {field_name} (m)')
     #set axis to be the same bounds
     plt.xlim(min(df['y_test']), max(df['y_test']))
     plt.ylim(min(df['y_test']), max(df['y_test']))
@@ -211,9 +186,12 @@ def plot_predictions(y_test, predictions, mean_score):
     y_max = max(df['y_test'])
     x_min = min(df['predictions'])
     x_max = max(df['predictions'])
-    x_position = x_min +x_min* 0.1 * (x_max - x_min)
-    y_position = y_max - 0.5 * (y_max - y_min)
-    plt.text(x_position, y_position, r"$r^2=    {:.3f}$".format(mean_score), fontsize=12, fontweight='bold',
+
+    # Adjust the position values to top left
+    x_position = x_min + 0.05 * (x_max - x_min)  # More towards the left
+    y_position = y_max - 0.05 * (y_max - y_min)  # Less from the top to ensure it is inside the plot
+
+    plt.text(x_position, y_position, r"$r^2={:.3f}$".format(mean_score), fontsize=12, fontweight='bold',
             verticalalignment='top', horizontalalignment='left', backgroundcolor='white', color='black')
 
     plt.legend(['Catchment', 'Perfect Correlation'], loc='lower right')

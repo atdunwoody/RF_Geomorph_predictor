@@ -4,8 +4,10 @@ import rasterio
 from osgeo import ogr
 from datetime import datetime
 import os
+import glob
 
-def open_gpkg(gpkg_path, layer_name):
+
+def open_gpkg(gpkg_path, layer_name = None):
     """
     Open a layer from a GeoPackage file as a GeoDataFrame.
 
@@ -90,6 +92,29 @@ def add_field_to_gdf(gdf, field_name, value):
     gdf[field_name] = value
     
     return gdf
+
+def update_field_based_on_another(gpkg_path, field_name, value_map):
+    """
+    Update the values of one field based on the values of another field in a GeoPackage.
+
+    Parameters:
+    gpkg_path (str): The file path to the GeoPackage.
+    field_name (str): The name of the field to update.
+    value_map (dict): A dictionary mapping the old values to new values.
+    """
+    # Load the GeoPackage
+    gdf = gpd.read_file(gpkg_path, index_col='fid')
+
+    # Check if 'fid' and the field to be updated are in the dataframe
+    if field_name not in gdf.columns:
+        print(gdf.columns)
+        raise ValueError("GeoDataFrame must contain 'fid' and '{}' columns".format(field_name))
+
+    # Apply the value mapping based on 'fid'
+    gdf[field_name] = gdf['fid'].apply(lambda x: value_map.get(x, gdf.at[gdf.index[gdf['fid'] == x], field_name]))
+
+    # Save the modified GeoDataFrame back to the GeoPackage
+    gdf.to_file(gpkg_path, layer='updated_layer', driver='GPKG')
 
 def convert_gdf_to_df_and_save_csv(gdf, csv_output_path):
     """
@@ -203,25 +228,94 @@ def concatenate_csv_list(csv_list, output_csv):
 
     print(f"CSV files have been concatenated and saved to: {output_csv}")
 
-def main():
-    gpkg_list = [
-                    r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\LM2 Hillslope Stats Clipped.gpkg",
-                    r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\LPM Hillslope Stats Clipped.gpkg",
-                    r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\MM Hillslope Stats Clipped.gpkg",
-                    r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\MPM Hillslope Stats Clipped.gpkg",
-                    r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\UM1 Hillslope Stats Clipped.gpkg",
-                    r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\UM2 Hillslope Stats Clipped.gpkg",
-                    ]
-
-    #Write a function to read csv file list concatenate and save as a single csv file
-
-    for gpkg in gpkg_list:
+def combine_attributes_and_save_to_csv(gpkg_dir):
+    gpkg_list = [os.path.join(gpkg_dir, gpkg) for gpkg in os.listdir(gpkg_dir) if gpkg.endswith('.gpkg')]
+    csv_dir = os.path.join(gpkg_dir, 'csv')
+    if not os.path.exists(csv_dir):
+        os.makedirs(csv_dir)
+    
+    csv_list = [os.path.join(csv_dir, gpkg.split('\\')[-1].replace('.gpkg', '.csv')) for gpkg in gpkg_list]
+    for gpkg, csv in zip(gpkg_list, csv_list):
         gdf = gpd.read_file(gpkg)
-        convert_gdf_to_df_and_save_csv(gdf, gpkg.replace('.gpkg', '.csv'))
+        df = pd.DataFrame(gdf.drop(columns='geometry'))
+            #add column to front of dataframe with the watershed name
+        df.insert(0, 'Watershed', gpkg.split('\\')[-1].replace('.gpkg', ''))
+        df.to_csv(csv, index=False)
 
-    csv_list = [gpkg.replace('.gpkg', '.csv') for gpkg in gpkg_list]
+    output_csv = os.path.join(csv_dir, 'combined_attributes.csv')
+    concatenate_csv_list(csv_list, output_csv) 
 
-    concatenate_csv_list(csv_list, r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\Hillslope_Stats_Combined 050224.csv") 
+def ensure_directory_exists(path):
+    """Ensure the directory for the given path exists. If not, create it."""
+    directory = os.path.dirname(path)
+    if not os.path.exists(directory):
+        os.makedirs(directory)
+        print(f"Directory created: {directory}")
+
+def convert_shapefiles_to_geopackages(input_folders, crs="EPSG:6342"):
+    """
+    Converts each shapefile into its own GeoPackage, setting the CRS to EPSG 6342.
+
+    Parameters:
+        input_folders (list of str): List of folder paths containing the shapefiles.
+        crs (str): Coordinate Reference System to set, default is 'EPSG:6342'.
+
+    Returns:
+        None: Writes each shapefile to its own GeoPackage.
+    """
+    # Loop through each folder
+    for folder in input_folders:
+        # Find all shapefiles in the folder
+        shapefiles = glob.glob(os.path.join(folder, "*.shp"))
+        
+        # Loop through each shapefile found
+        for shapefile in shapefiles:
+            # Read the shapefile
+            gdf = gpd.read_file(shapefile)
+
+            # Set or convert the CRS to EPSG 6342
+            gdf = gdf.set_crs(crs)
+
+            # Define the output GeoPackage name and path based on the shapefile name
+            gpkg_name = os.path.splitext(os.path.basename(shapefile))[0] + ".gpkg"
+            gpkg_path = os.path.join(folder, gpkg_name)
+
+            # Ensure the output directory exists
+            ensure_directory_exists(gpkg_path)
+
+            # Write the GeoDataFrame to a new GeoPackage
+            gdf.to_file(gpkg_path, layer='data', driver="GPKG")
+
+            print(f"Shapefile {shapefile} converted to GeoPackage {gpkg_path} with CRS {crs}.")
+
+
+
+def main():
+    gpkg_dir = r"Y:\ATD\GIS\East_Troublesome\Watershed_Boundaries"
+    
+    gpkg_list = [os.path.join(gpkg_dir, gpkg) for gpkg in os.listdir(gpkg_dir) if gpkg.endswith('.gpkg')]
+    gpkg_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Channels\Segmented Polygons\Test\MM _channel_segmented - Copy.gpkg"
+    field_name = 'Split'
+    #create a value_map where split = 1 if fid = 120,  split =2 if 121< fid < 149, split = 3 if fid >= 150
+    value_map = {120: 1}
+    for i in range(121, 150):
+        value_map[i] = 2
+    for i in range(150, 173):
+        value_map[i] = 3
+        
+    #update_field_based_on_another(gpkg_path, field_name, value_map)
+    combine_attributes_and_save_to_csv(gpkg_dir)
+    folders = [
+    "Y:/ATD/GIS/East_Troublesome/Watershed_Boundaries/LM2_boundary",
+    "Y:/ATD/GIS/East_Troublesome/Watershed_Boundaries/LPM_boundary",
+    "Y:/ATD/GIS/East_Troublesome/Watershed_Boundaries/MM_boundary",
+    "Y:/ATD/GIS/East_Troublesome/Watershed_Boundaries/MPM_boundary",
+    "Y:/ATD/GIS/East_Troublesome/Watershed_Boundaries/UM1_boundary",
+    "Y:/ATD/GIS/East_Troublesome/Watershed_Boundaries/UM2_boundary"
+    ]
+    # convert_shapefiles_to_geopackages(folders)
+    
+
 
 if __name__ == "__main__":
     main()

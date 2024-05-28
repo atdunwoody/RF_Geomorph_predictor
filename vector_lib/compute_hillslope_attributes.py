@@ -7,29 +7,93 @@ import os
 from vector_utils import save_gpkg
 from shapely.geometry import Point
 
-def compute_area_and_perimeter(gdf, id_field='ID', output_shapefile_path=None):
+def add_area_field(gdf, output_shapefile_path=None, id_field='geometry'):
 
+    if type(gdf) == str:
+        gdf = gpd.read_file(gdf)
+        
     # Check if the id_field exists
     if id_field not in gdf.columns:
         raise ValueError(f"The specified id_field '{id_field}' does not exist in the shapefile.")
     
     # Compute area and perimeter for each sub-shape
     gdf['Area'] = gdf['geometry'].area
-    gdf['Perimeter'] = gdf['geometry'].length
-    
-    # Group by id_field and sum the area and perimeter if there are multiple geometries per ID
-    results = gdf.groupby(id_field).agg({
-        'Area': 'sum',
-        'Perimeter': 'sum'
-    }).reset_index()
-    
-    # Merge the results back to the original GeoDataFrame to maintain all original fields
-    gdf = gdf.merge(results, on=id_field, suffixes=('', '_total'))
+    #gdf['Perimeter'] = gdf['geometry'].length
     
     # Optionally, save the updated GeoDataFrame to a new shapefile
     if output_shapefile_path is not None:
         gdf.to_file(output_shapefile_path)
         
+    return gdf
+
+
+def aggregate_elevation(gdf, raster_path = None, output_shp_path = None):
+    print("Aggregating Elevation")
+    if raster_path is None:
+        raster_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LIDAR\Reprojected to UTM Zone 13N\ET_merged_LIDAR_2020_1m_DEM_reproj.tif"
+    stats_fields = { 'mean': 'Mean Elevation'}
+    gdf = aggregate_raster_stats(raster_path, gdf, mode='mean', **stats_fields)
+    stats_fields = { 'max': 'Max Elevation'}
+    gdf = aggregate_raster_stats(raster_path, gdf, mode='max', **stats_fields)
+    stats_fields = { 'min': 'Min Elevation'}
+    gdf = aggregate_raster_stats(raster_path, gdf, mode='min', **stats_fields)
+    if output_shp_path is not None:
+        save_gpkg(gdf, output_shp_path, overwrite=True)
+    return gdf
+
+def aggregate_slope(gdf, output_shp_path = None):
+    print("Aggregating Slope")
+    raster_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Terrain Feature Rasters\Slope.tif"
+    stats_fields = {'mean': 'Slope Mean'}
+    gdf = aggregate_raster_stats(raster_path, gdf, mode='mean',  
+                        output_shapefile_path=None, **stats_fields)
+    
+    stats_fields = { 'std': 'Slope std'}
+    
+    gdf = aggregate_raster_stats(raster_path, gdf, mode='std', 
+                        output_shapefile_path=None, **stats_fields)
+    
+    if output_shp_path is not None:
+        save_gpkg(gdf, output_shp_path, overwrite=True)
+    return gdf
+
+def aggregate_dNBR(gdf, raster_path = None, output_shp_path = None):
+    print("Aggregating dNBR")
+    dNBR_values = {"Unburned" : 1,
+                   "Low Severity" : 2,
+                   "Moderate Severity" : 3,
+                   "High Severity" : 4,
+                    }
+    if raster_path is None:
+        raster_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\dNBR\east_troublesome_co4020310623920201014_sbs.tif"
+    #get percent of dNBR values that match the values in dNBR_values
+    for key, value in dNBR_values.items():
+        stats_fields = { 'percent': f'dNBR % {key}'}
+        gdf = aggregate_raster_stats(raster_path, gdf, mode='percent', raster_value_to_match= value, **stats_fields)
+    if output_shp_path is not None:
+        save_gpkg(gdf, output_shp_path, overwrite=True)
+    return gdf
+    
+def add_centroid_field(gdf, geopackage_output_path = None):
+    """
+    This function loads a geopackage containing multipolygon geometries, computes the centroids of each multipolygon,
+    and saves the result in a new geopackage with an added field 'Centroid' containing the centroid coordinates.
+    
+    Parameters:
+        geopackage_input_path (str): The file path to the input geopackage.
+        geopackage_output_path (str): The file path to the output geopackage where the modified data will be saved.
+    """
+    # Load the geopackage into a GeoDataFrame
+    
+    # Calculate the centroid for each geometry in the DataFrame
+    gdf['Centroid'] = gdf['geometry'].centroid
+    
+    # Convert Centroid geometry to text representation for easier reading and use
+    gdf['Centroid'] = gdf['Centroid'].apply(lambda x: f"({x.x}, {x.y})")
+    
+    if geopackage_output_path is not None:
+        # Save the modified GeoDataFrame back to a new geopackage
+        gdf.to_file(geopackage_output_path, driver='GPKG')
     return gdf
 
 def calculate_polygon_width_and_length(polygon):
@@ -70,7 +134,7 @@ def aggregate_raster_stats(raster_path, gdf, mode='mean', threshold=None, thresh
     Args:
         raster_path (str): Path to the raster file.
         gdf (GeoDataFrame): GeoDataFrame containing the shapes.
-        mode (str): Aggregation mode, one of 'mean', 'std', 'sum', 'percent'.
+        mode (str): Aggregation mode, one of 'mean','median', 'max', 'min', 'std', 'sum', 'percent'.
         threshold (float, optional): Value to filter the raster data.
         threshold_direction (str): 'above' or 'below', direction for threshold filtering.
         raster_value_to_match: Value(s) that raster cells must match to be included.
@@ -80,18 +144,19 @@ def aggregate_raster_stats(raster_path, gdf, mode='mean', threshold=None, thresh
     Returns:
         GeoDataFrame: The updated GeoDataFrame.
     """
+    valid_stat_list = ['mean', 'median', 'max', 'min', 'std', 'sum', 'percent', 'count']
     with rasterio.open(raster_path) as src:
         no_data = src.nodata
 
         # Prepare the GDF by adding new columns for specified stats
-        for stat in ['mean', 'std', 'sum', 'percent', 'count']:
+        for stat in valid_stat_list:
             field_name = stats_fields.get(f'{stat}', None)
             if field_name is not None:
                 gdf[field_name] = np.nan
 
         # Process each geometry
         for index, row in gdf.iterrows():
-            print(f"Progeess: {index}/{len(gdf)}", end='\r')
+            print(f"Progress: {index+1}/{len(gdf)}", end='\r')
             shapes = gdf.iloc[[index]]
             out_image, out_transform = mask(src, shapes.geometry, crop=True, all_touched=True)
             data = out_image[out_image != no_data]
@@ -116,6 +181,8 @@ def aggregate_raster_stats(raster_path, gdf, mode='mean', threshold=None, thresh
             if data.size > 0:
                 if mode == 'mean':
                     result = np.mean(data)
+                elif mode == 'median':
+                    result = np.median(data)
                 elif mode == 'std':
                     result = np.std(data)
                 elif mode == 'sum':
@@ -124,11 +191,15 @@ def aggregate_raster_stats(raster_path, gdf, mode='mean', threshold=None, thresh
                     result = np.count_nonzero(data_masked) / np.count_nonzero(data) * 100
                 elif mode == 'count':
                     result = np.count_nonzero(data)
+                elif mode == 'max':
+                    result = np.max(data)
+                elif mode == 'min':
+                    result = np.min(data)
             else:
                 result = np.nan
 
             # Update the GDF with the calculated results
-            for stat in ['mean', 'sum', 'percent', 'std', 'count']:
+            for stat in valid_stat_list:
                 field_name = stats_fields.get(f'{stat}', None)
                 if field_name is not None and mode == stat:
                     gdf.at[index, field_name] = result
@@ -292,22 +363,6 @@ def aggregate_masked_erosion(gdf, raster_path, output_shp_path = None):
         save_gpkg(gdf, output_shp_path, overwrite=True)
     return gdf
 
-def aggregate_slope(gdf, output_shp_path = None):
-    print("Aggregating Slope")
-    raster_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Terrain Feature Rasters\Slope.tif"
-    stats_fields = {'mean': 'Slope Mean'}
-    gdf = aggregate_raster_stats(raster_path, gdf, mode='mean',  
-                        output_shapefile_path=None, **stats_fields)
-    
-    stats_fields = { 'std': 'Slope std'}
-    
-    gdf = aggregate_raster_stats(raster_path, gdf, mode='std', 
-                        output_shapefile_path=None, **stats_fields)
-    
-    if output_shp_path is not None:
-        save_gpkg(gdf, output_shp_path, overwrite=True)
-    return gdf
-
 def aggregate_aspect(gdf, output_shp_path = None):
     print("Aggregating Aspect")
     raster_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Terrain Feature Rasters\Aspect.tif"
@@ -332,7 +387,7 @@ def aggregate_bare_earth(gdf, raster_path, output_shp_path = None):
             save_gpkg(gdf, output_shp_path, overwrite=True)
         return gdf
     
-def aggregate_MI60(gdf, raster_path, output_shp_path = None):
+def aggregate_MI60(gdf, raster_path = None, output_shp_path = None):
     print("Aggregating Max Intensity 60 min")
     stats_fields = { 'mean': 'Max Int 60 min'}
     gdf = aggregate_raster_stats(raster_path, gdf, mode='mean', **stats_fields)
@@ -340,7 +395,7 @@ def aggregate_MI60(gdf, raster_path, output_shp_path = None):
         save_gpkg(gdf, output_shp_path, overwrite=True)
     return gdf
 
-def aggregare_accumulated_precip(gdf, raster_path, output_shp_path = None):
+def aggregare_accumulated_precip(gdf, raster_path = None, output_shp_path = None):
     print("Aggregating Accumulated Precipitation")
     stats_fields = { 'mean': 'Accumulated Precipitation'}
     gdf = aggregate_raster_stats(raster_path, gdf, mode='mean', **stats_fields)
@@ -348,7 +403,7 @@ def aggregare_accumulated_precip(gdf, raster_path, output_shp_path = None):
         save_gpkg(gdf, output_shp_path, overwrite=True)
     return gdf
 
-def aggregate_flow_accumulation(gdf, raster_path, output_shp_path = None):
+def aggregate_flow_accumulation(gdf, raster_path = None, output_shp_path = None):
     print("Aggregating Flow Accumulation")
     stats_fields = { 'mean': 'Flow Accumulation'}
     gdf = aggregate_raster_stats(raster_path, gdf, mode='mean', **stats_fields)
@@ -356,7 +411,7 @@ def aggregate_flow_accumulation(gdf, raster_path, output_shp_path = None):
         save_gpkg(gdf, output_shp_path, overwrite=True)
     return gdf
 
-def aggregate_TRI(gdf, raster_path, output_shp_path = None):
+def aggregate_TRI(gdf, raster_path = None, output_shp_path = None):
     print("Aggregating Terrain Ruggedness Index")
     stats_fields = { 'mean': 'Terrain Ruggedness Index'}
     gdf = aggregate_raster_stats(raster_path, gdf, mode='mean', **stats_fields)
@@ -364,7 +419,7 @@ def aggregate_TRI(gdf, raster_path, output_shp_path = None):
         save_gpkg(gdf, output_shp_path, overwrite=True)
     return gdf
 
-def aggregate_curvature(gdf, raster_path, output_shp_path = None):
+def aggregate_curvature(gdf, raster_path = None, output_shp_path = None):
     print("Aggregating curvature")
     stats_fields = { 'mean': 'Curvature'}
     gdf = aggregate_raster_stats(raster_path, gdf, mode='mean', **stats_fields)
@@ -372,45 +427,47 @@ def aggregate_curvature(gdf, raster_path, output_shp_path = None):
         save_gpkg(gdf, output_shp_path, overwrite=True)
     return gdf
 
+def summarize_raster(gdf):  
+    gdf = add_area_field(gdf)
+    gdf = aggregate_elevation(gdf)
+    gdf = aggregate_slope(gdf)
+    gdf = aggregate_dNBR(gdf)
+    return gdf
+    
+    
 def main():
 
     shp_id = 'geometry'
-    gpkg_list = [
-                r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\LM2 Hillslope Stats Clipped.gpkg",
-                r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\LPM Hillslope Stats Clipped.gpkg",
-                r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\MM Hillslope Stats Clipped.gpkg",
-                r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\MPM Hillslope Stats Clipped.gpkg",
-                r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\UM1 Hillslope Stats Clipped.gpkg",
-                r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Hillslopes\Stream Clipped Hillslopes Pruned\UM2 Hillslope Stats Clipped.gpkg",
-                 ]
-    
-    raster_paths = [
-r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\Error Thresholded\DoD LM2_070923_error_thresholded.tif",
-r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\Error Thresholded\DoD LPM_070920_error_thresholded.tif",
-r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\Error Thresholded\DoD MM 0709202_error_thresholded.tif",
-r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\Error Thresholded\DoD MPM_070923_error_thresholded.tif",
-r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\Error Thresholded\DoD UM1_070923_error_thresholded.tif",
-r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\Error Thresholded\DoD UM2_070923_error_thresholded.tif",
-
-     ]
-    
-    for gpkg, raster_path in zip(gpkg_list, raster_paths):
-        print(f"Aggregating attributes for {gpkg}")
-        gdf = gpd.read_file(gpkg)
+    gpkg_list = [    
+        r"Y:\ATD\GIS\East_Troublesome\Watershed_Boundaries\LM2 boundary.gpkg",
+        r"Y:\ATD\GIS\East_Troublesome\Watershed_Boundaries\LPM boundary.gpkg",
+        r"Y:\ATD\GIS\East_Troublesome\Watershed_Boundaries\MM boundary.gpkg",
+        r"Y:\ATD\GIS\East_Troublesome\Watershed_Boundaries\MPM boundary.gpkg",
+        r"Y:\ATD\GIS\East_Troublesome\Watershed_Boundaries\UM1 boundary.gpkg",
+        r"Y:\ATD\GIS\East_Troublesome\Watershed_Boundaries\UM2 boundary.gpkg",
+    ]
+    out_gpkg = r"Y:\ATD\GIS\East_Troublesome\Watershed_Boundaries\Watershed_Boundaries_features.gpkg"
+ 
+    for gpkg in gpkg_list:
+        gdf = gpd.read_file(gpkg, layer = 1)
+        #loop through all layers in the geopackage
+        #gdf = summarize_raster(gdf)
+        out_gpkg = gpkg.replace('.gpkg', '_features.gpkg')
         #aggregate_bare_earth(gdf, raster, gpkg)
         #gdf_temp = aggregate_MI60(gdf, raster_paths[1])
         #aggregare_accumulated_precip(gdf_temp, raster_paths[0], gpkg)
         # Calculate width and length and store them in new columns
-        #gdf['width'], gdf['length'] = zip(*gdf['geometry'].apply(calculate_polygon_width_and_length))
+        # gdf['width'], gdf['length'] = zip(*gdf['geometry'].apply(calculate_polygon_width_and_length))
+        # gdf = add_centroid_field(gdf)
         # gdf = aggregate_width_over_length(gdf)
         # gdf = aggregate_curvature(gdf, raster_paths[0])
         # gdf = aggregate_TRI(gdf, raster_paths[1])
         # gdf = aggregate_flow_accumulation(gdf, raster_paths[2])
-        #gdf = aggregate_erosion_deposition(gdf)
-        gdf = aggregate_masked_erosion(gdf, raster_path)
-        gdf = aggregate_masked_deposition(gdf, raster_path)
+        # gdf = aggregate_erosion_deposition(gdf)
+        # gdf = aggregate_masked_erosion(gdf, raster_path)
+        # gdf = aggregate_masked_deposition(gdf, raster_path)
         # Save the modified GeoDataFrame to a new shapefile
-        save_gpkg(gdf, gpkg, overwrite=True)
+        gdf.to_file(out_gpkg, driver='GPKG')
 
 if __name__ == '__main__':
     main()

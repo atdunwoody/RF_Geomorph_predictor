@@ -4,6 +4,7 @@ from osgeo import gdal
 from shapely.geometry import LineString, Point
 import rasterio
 from rasterio.features import rasterize
+import pandas as pd
 from compute_hillslope_attributes import aggregate_erosion_deposition, aggregate_masked_erosion_deposition
 
 def overlay_points_with_buffer_on_raster(points_gpkg_path, raster_path, buffer_size, output_gpkg_path):
@@ -106,6 +107,107 @@ def create_points_along_path(filepath):
     points_gdf.to_file(outfile, driver="GPKG")
     return points_gdf
 
+def calculate_distance(gdf):
+    gdf['Centroid'] = gdf['geometry'].centroid
+    gdf['buffer'] = gdf.geometry.buffer(1)  # Ensures adjacency
+    joined_gdf = gpd.sjoin(gdf[['geometry', 'Centroid', 'Elevation Mean', 'Slope Mean']], 
+                           gdf[['geometry', 'Centroid', 'Elevation Mean', 'Slope Mean']], 
+                           how='left', 
+                           predicate='intersects')
+    joined_gdf = joined_gdf[joined_gdf.index != joined_gdf.index_right]
+    joined_gdf['Distance'] = joined_gdf.apply(lambda row: row['Centroid_left'].distance(row['Centroid_right']), axis=1)
+    return joined_gdf
+
+def get_adjacent_slopes(input_gpkg, output_gpkg):
+    gdf = gpd.read_file(input_gpkg)
+    joined_gdf = calculate_distance(gdf)
+
+    # Assign directional distances and slopes
+    joined_gdf['Distance Upstream'] = np.where(joined_gdf['Elevation Mean_left'] < joined_gdf['Elevation Mean_right'], joined_gdf['Distance'], np.nan)
+    joined_gdf['Distance Downstream'] = np.where(joined_gdf['Elevation Mean_left'] > joined_gdf['Elevation Mean_right'], joined_gdf['Distance'], np.nan)
+    joined_gdf['Slope Upstream'] = np.where(joined_gdf['Elevation Mean_left'] < joined_gdf['Elevation Mean_right'], joined_gdf['Slope Mean_right'], np.nan)
+    joined_gdf['Slope Downstream'] = np.where(joined_gdf['Elevation Mean_left'] > joined_gdf['Elevation Mean_right'], joined_gdf['Slope Mean_right'], np.nan)
+
+    # Calculate the mean of the values grouped by the original index
+    final_stats = joined_gdf.groupby(joined_gdf.index).agg({
+        'Distance Upstream': 'mean',
+        'Distance Downstream': 'mean',
+        'Slope Upstream': 'mean',
+        'Slope Downstream': 'mean'
+    })
+
+    # Merge the results back to the original GeoDataFrame
+    gdf = gdf.join(final_stats, how='left')
+
+    # Set geometry column explicitly and clean up data
+    gdf.set_geometry('geometry', inplace=True)
+    gdf.drop(columns=['buffer', 'Centroid'], inplace=True)
+
+    # Write the updated GeoDataFrame to a new geopackage
+    gdf.to_file(output_gpkg, driver='GPKG')
+
+    return gdf
+
+def calculate_central_slope_difference(input_gpkg, output_gpkg):
+    gdf = gpd.read_file(input_gpkg)
+    #check if slope upstream exists
+    if 'Slope Upstream' not in gdf.columns:
+        gdf = get_adjacent_slopes(input_gpkg, output_gpkg)
+
+    # Define a function to calculate central difference using dynamic h
+    def central_diff(row):
+        if np.isnan(row['Distance Upstream']) or np.isnan(row['Distance Downstream']):
+            return None
+        return (row['Slope Upstream'] - row['Slope Downstream']) / (row['Distance Upstream'] + row['Distance Downstream'])
+
+    # Apply function to calculate central slope differences
+    gdf['Central Slope Difference'] = gdf.apply(central_diff, axis=1)
+
+    # Write the updated GeoDataFrame to a new geopackage
+    gdf.to_file(output_gpkg, driver='GPKG')
+
+    return gdf
+
+def calculate_backward_slope_difference(input_gpkg, output_gpkg):
+    gdf = gpd.read_file(input_gpkg)
+    #check if slope upstream exists
+    if 'Slope Upstream' not in gdf.columns:
+        gdf = get_adjacent_slopes(input_gpkg, output_gpkg)
+
+    # Define a function to calculate backward difference direction based on elevation
+    def backward_diff(row):
+        if np.isnan(row['Distance Upstream']):
+            return None
+        return (row['Slope Mean'] - row['Slope Upstream']) / (row['Distance Upstream'])
+
+    # Apply function to calculate backward slope differences
+    gdf['Backward Slope Difference'] = gdf.apply(backward_diff, axis=1)
+
+    # Write the updated GeoDataFrame to a new geopackage
+    gdf.to_file(output_gpkg, driver='GPKG')
+
+    return gdf
+
+def calculate_forward_slope_difference(input_gpkg, output_gpkg):
+    gdf = gpd.read_file(input_gpkg)
+    #check if slope upstream exists
+    if 'Slope Upstream' not in gdf.columns:
+        gdf = get_adjacent_slopes(input_gpkg, output_gpkg)
+
+    # Define a function to calculate forward difference direction based on elevation
+    def forward_diff(row):
+        if np.isnan(row['Distance Downstream']):
+            return None
+        return (row['Slope Downstream'] - row['Slope Mean']) / (row['Distance Downstream'])
+
+    # Apply function to calculate forward slope differences
+    gdf['Forward Slope Difference'] = gdf.apply(forward_diff, axis=1)
+
+    # Write the updated GeoDataFrame to a new geopackage
+    gdf.to_file(output_gpkg, driver='GPKG')
+
+    return gdf
+
 
 def main():
     # Define the filepath
@@ -131,6 +233,13 @@ def main():
     
     aggregate_erosion_deposition(channel_list, 0.05)
     aggregate_masked_erosion_deposition(channel_list, 0.05)
+    # channel_poly_paths = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Channels\Segmented Polygons\LM2_channel_segmented.gpkg"
+    # output_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Channels\Segmented Polygons\Test\UM2_channel_segmented.gpkg"
+
+    # # add_centroid_field(output_path, output_path)
+    # calculate_forward_slope_difference(channel_poly_paths, output_path)
+    # calculate_backward_slope_difference(output_path, output_path)
+    # gdf = calculate_central_slope_difference(output_path, output_path)
     
 if __name__ == '__main__':
     main()
