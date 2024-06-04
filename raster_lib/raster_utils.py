@@ -478,29 +478,22 @@ def filter_raster_by_threshold(threshold_raster_path, raster_to_filter_path, out
 
 def main():
     raster_files = [
-    r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\DoD LM2_070923_5cm_veg_masked_QGIS_ET_lower_LIDAR_2020_1m_DEM_reproj_nuth_x+1 - ET_lower_LIDAR_2020_1m_DEM_reproj.tif",
-    r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\DoD LPM_07092023_Veg_Masked_v2_NDV_ET_low_LIDAR_2020_1m_DEM_reproj_nuth_x+0 - ET_low_LIDAR_2020_1m_DEM_reproj.tif",
-    r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\DoD MM 07092023_Veg_Masked_5cm_ET_middle_LIDAR_2020_1m_DEM_reproj_nuth_x+1 - ET_middle_LIDAR_2020_1m_DEM_reproj.tif",
-    r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\DoD MPM_070923_5cm_veg_masked_QGIS_ET_middle_LIDAR_2020_1m_DEM_reproj_nuth_x+1 - ET_middle_LIDAR_2020_1m_DEM_reproj.tif",
-    r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\DoD UM1_070923_5cm_veg_masked_ET_upper_LIDAR_2020_1m_DEM_reproj_nuth_x+1 - ET_upper_LIDAR_2020_1m_DEM_reproj.tif",
-    r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\DoD UM2_070923_5cm_veg_masked_ET_upper_LIDAR_2020_1m_DEM_reproj_nuth_x+1 - ET_upper_LIDAR_2020_1m_DEM_reproj.tif",
-    ]
+    r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Aligned DoDs\DoD 070923 SfM\LM2_070923_5cm_veg_masked_QGIS_LM2_081222_5cm_veg_masked_QGIS_nuth_x-0.00_y-0.01_z-0.00_align_diff.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Aligned DoDs\DoD 070923 SfM\LPM 070923 SfM Veg Masked_aligned_to_LPM 081222_nuth_x+0.00_y+0.01_z+0.00_align_diff.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Aligned DoDs\DoD 070923 SfM\MM 070923 SfM Veg Masked_aligned_to_MM 081222_nuth_x-0.03_y-0.06_z+0.02_align_diff.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Aligned DoDs\DoD 070923 SfM\MPM 070923 SfM Masked Veg_aligned_to_MPM 100622_nuth_x+0.27_y-0.50_z+0.08_align_diff.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Aligned DoDs\DoD 070923 SfM\UM1_070923 - 090822_5cm_veg_masked_QGIS.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Aligned DoDs\DoD 070923 SfM\UM2 070923 SfM Masked Veg_aligned_to_UM2 071922_nuth_x-0.02_y+0.00_z+0.00_align_diff.tif",
+]
     
-    filtering_rasters = [
-        r"Y:\ATD\Drone Data Processing\Error\Gross Change\Krigged SfM Covariance\LM2_2023_pt_prec_070923_1m.tif",
-r"Y:\ATD\Drone Data Processing\Error\Gross Change\Krigged SfM Covariance\LPM_Intersection_PA3_RMSE_018_pt_prec_070923_1m.tif",
-r"Y:\ATD\Drone Data Processing\Error\Gross Change\Krigged SfM Covariance\MM_all_102023_align60k_intersection_one_checked_pt_prec_070923.tif",
-r"Y:\ATD\Drone Data Processing\Error\Gross Change\Krigged SfM Covariance\MPM_2023_090122_REMOVED_pt_prec_070923.tif",
-r"Y:\ATD\Drone Data Processing\Error\Gross Change\Krigged SfM Covariance\UM1_2023_pt_prec_070923.tif",
-r"Y:\ATD\Drone Data Processing\Error\Gross Change\Krigged SfM Covariance\UM2_2023_pt_prec_070923.tif",
+    error_rasters = [
+        r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\SfM Propagated\LM2_2023_pt_prec_070923_error_prop_ndv.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\SfM Propagated\LPM_Intersection_PA3_RMSE_018_pt_prec_070923_error_prop_ndv.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\SfM Propagated\MM_all_102023_align60k_intersection_one_checked_pt_prec_070923_error_prop_ndv.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\SfM Propagated\MPM_2023_090122_REMOVED_pt_prec_070923_error_prop_ndv.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\SfM Propagated\UM1_2023_pt_prec_070923_error_prop_ndv.tif",
+r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\SfM Propagated\UM2_2023_pt_prec_070923_error_prop_ndv.tif",
     ]
-    crs = {'init': 'EPSG:6342'}
-    error_rasters = []
-    for raster in filtering_rasters:
-        outfile = raster.split(".")[0] + "_LIDAR_error_prop_10cm.tif"
-        error_rasters.append(outfile)
-        #change_raster_crs(raster, outfile, crs)
-        apply_math_to_raster(raster, outfile, lambda x: 1.96 * np.sqrt(0.1**2 + (x/1000)**2))
 
 
     for raster_file, error_raster in zip(raster_files, error_rasters):
@@ -508,10 +501,10 @@ r"Y:\ATD\Drone Data Processing\Error\Gross Change\Krigged SfM Covariance\UM2_202
         error_name = os.path.basename(error_raster).split(".")[0]
         print(f"Filtering {raster_name}")
         print(f"Using error raster {error_name}")
-        output_dir = os.path.join(os.path.dirname(error_raster), "Error Thresholded_10cm")
+        output_dir = os.path.join(os.path.dirname(error_raster), "DoD Error Thresholded")
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
-        output_file = os.path.join(output_dir, os.path.basename(raster_file).split(".")[0][0:14] + "_error_thresholded.tif")
+        output_file = os.path.join(output_dir, os.path.basename(raster_file).split(".")[0][0:40] + "_error_thresholded.tif")
         filter_raster_by_threshold(
             threshold_raster_path=error_raster,
             raster_to_filter_path=raster_file,

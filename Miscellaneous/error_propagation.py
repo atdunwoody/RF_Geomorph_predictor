@@ -3,166 +3,39 @@ import rasterio
 import rioxarray
 from rasterio.enums import Resampling
 from dask.diagnostics import ProgressBar
-
-def apply_math_to_single_raster(input_raster_path, output_raster_path, math_func, no_data_value = None):
-    """
-    Applies a mathematical operation to a raster based on a user-defined lambda function.
-
-    Parameters:
-    - input_raster_path (str): Path to the input raster file. This raster provides the values that will be transformed.
-    - output_raster_path (str): Path where the transformed raster will be saved.
-    - math_func (callable): A function that takes a numpy array (input raster data) and returns a numpy array after applying the mathematical transformation.
-
-    Examples of math_func:
-    - Lambda x: x + 10: Adds 10 to each pixel value in the raster.
-    - Lambda x: x * 2: Multiplies each pixel value in the raster by 2.
-    - Lambda x: np.log(x + 1): Applies the natural logarithm function to each pixel value in the raster after adding 1 to avoid log(0).
-
-    Returns:
-    - None: The function saves the transformed raster to the specified output path and does not return any value.
-    """
-    # Open the input raster
-    with rasterio.open(input_raster_path) as input_rast:
-        data = input_rast.read(1)  # Read the first band
-        profile = input_rast.profile  # Get the metadata to write back the output
-    #filter out no data values
-    if no_data_value is None:
-        data = np.where(data == input_rast.nodata, np.nan, data)
-    else:
-        data = np.where(data == no_data_value, np.nan, data)
-    # Apply the mathematical operation using the provided lambda function
-    transformed_data = math_func(data)
-
-    # Save the transformed raster
-    with rasterio.open(output_raster_path, 'w', **profile) as dst:
-        dst.write(transformed_data, 1)
-
-def gross_error_propagation_LIDAR(raster_list):
-    for raster in raster_list:
-        outfile = raster.split(".")[0] + "_LIDAR_error_prop.tif"
-        #change_raster_crs(raster, outfile, crs)
-        #0.100 is LIDAR RMSEz reported for 2020 LIDAR flights
-        ru.apply_math_to_raster(raster, outfile, lambda x: 1.96 * np.sqrt(0.100**2 + (x/1000)**2))
-
-def apply_math_to_raster(input_raster1_path, input_raster2_path, output_raster_path, math_func, no_data_value=None):
-    """
-    Applies a mathematical operation to two rasters based on a user-defined lambda function.
-
-    Parameters:
-    - input_raster1_path (str): Path to the first input raster file.
-    - input_raster2_path (str): Path to the second input raster file.
-    - output_raster_path (str): Path where the transformed raster will be saved.
-    - math_func (callable): A function that takes two numpy arrays (input raster data) and returns a numpy array after applying the mathematical transformation.
-
-    Returns:
-    - None: The function saves the transformed raster to the specified output path and does not return any value.
-    """
-    # Open the first input raster
-    with rasterio.open(input_raster1_path) as input_rast1:
-        data1 = input_rast1.read(1)  # Read the first band
-        profile = input_rast1.profile  # Get the metadata to write back the output
-    
-    # Open the second input raster
-    with rasterio.open(input_raster2_path) as input_rast2:
-        data2 = input_rast2.read(1)  # Read the first band
-    
-    # Filter out no data values
-    if no_data_value is None:
-        data1 = np.where(data1 == input_rast1.nodata, np.nan, data1)
-        data2 = np.where(data2 == input_rast2.nodata, np.nan, data2)
-    else:
-        data1 = np.where(data1 == no_data_value, np.nan, data1)
-        data2 = np.where(data2 == no_data_value, np.nan, data2)
-    
-    # Apply the mathematical operation using the provided lambda function
-    transformed_data = math_func(data1, data2)
-
-    # Save the transformed raster
-    with rasterio.open(output_raster_path, 'w', **profile) as dst:
-        dst.write(transformed_data, 1)
-
-def gross_error_propagation(raster_list):
-    for input_raster1_path, input_raster2_path in raster_list:
-        output_raster_path = input_raster1_path.split(".")[0] + "_error_prop.tif"
-        apply_math_to_raster(
-            input_raster1_path, 
-            input_raster2_path, 
-            output_raster_path, 
-            lambda x, y: 1.96 * np.sqrt((x/1000)**2 + (y/1000)**2)
-        )
-        
-def match_rasters(source_raster_fn, ref_raster_fn, output_fn=None, match_res=True, method=Resampling.bilinear):
-    raster1 = rioxarray.open_rasterio(source_raster_fn, chunks=True)
-    raster2 = rioxarray.open_rasterio(ref_raster_fn, chunks=True)
-
-    # Resample raster1 to match the resolution of raster2 (finer resolution)
-    resampled_raster = resample_raster_to_match(raster1, raster2, match_res = match_res, method=method)
-
-    if output_fn is not None:
-        # Save the resampled raster to a new file
-        with ProgressBar():
-            resampled_raster.rio.to_raster(output_fn)
-    return resampled_raster
-
-def resample_raster_to_match(raster_to_resample, reference_raster, match_res=True, method=Resampling.bilinear):
-    """
-    Resample a raster dataset to match the resolution of a reference raster,
-    choosing either the finer or coarser resolution.
-    
-    Parameters:
-        raster_to_resample (rioxarray object): The raster to be resampled.
-        reference_raster (rioxarray object): The raster whose resolution is used as the target.
-        match_res (bool, int, float): If True, match to the finer resolution; false, match to the coarser, or specify resolution
-        method (str): Resampling method - options include 'nearest', 'bilinear', 'cubic', etc.
-    
-    Returns:
-        rioxarray object: Resampled raster.
-    """
-    # Get the resolutions of both rasters
-    res_x1, res_y1 = raster_to_resample.rio.resolution()
-    res_x2, res_y2 = reference_raster.rio.resolution()
-
-    # Determine the target resolution
-    if type(match_res) == int or type(match_res) == float:
-        target_resolution = (abs(match_res), abs(match_res))
-        
-    elif match_res and type(match_res) == bool:
-        target_resolution = (min(abs(res_x1), abs(res_x2)), min(abs(res_y1), abs(res_y2)))
-    
-    elif not match_res and type(match_res) == bool:
-        target_resolution = (max(abs(res_x1), abs(res_x2)), max(abs(res_y1), abs(res_y2)))
-
-    else:
-        raise ValueError("Invalid match_res argument. Use True, False, or a specific resolution.")
-    
-    return resample_raster_to_resolution(raster_to_resample, target_resolution, method)
-
-def resample_raster_to_resolution(raster, target_resolution, method= Resampling.bilinear):
-    """
-    Resample a raster dataset to a specified resolution.
-    """
-    if raster.rio.encoded_nodata is None:
-        raster.rio.write_nodata(-9999, inplace=True)
-    
-    if 'chunks' not in raster.encoding:
-        raster = raster.chunk({'band': 1, 'x': 2048, 'y': 2048})
-
-    width = (raster.rio.bounds()[2] - raster.rio.bounds()[0]) / target_resolution[0]
-    height = (raster.rio.bounds()[3] - raster.rio.bounds()[1]) / target_resolution[1]
-
-    resampled_raster = raster.rio.reproject(
-        raster.rio.crs,
-        shape=(int(height), int(width)),
-        resampling_method=method
-    )
-
-    return resampled_raster
-
-import rasterio
-from rasterio.enums import Resampling
+import glob
 import pandas as pd
-import numpy as np
+import os
 
+
+def gross_error_propagation_LIDAR(SfM_raster_path, output_raster_path, LIDAR_error=0.1):
+    #LIDAR_error is the RMSEz reported from the LIDAR data report, 0.1 for 2020 ETF LIDAR data
+    SfM_raster = rioxarray.open_rasterio(SfM_raster)
+    #perform raster math output = 1.96 * sqrt((SfM/1000)^2 + (0.19)^2)
+    output_raster = 1.96 * np.sqrt((SfM_raster/1000)**2 + (LIDAR_error)**2)
+    # Save the transformed raster
+    with ProgressBar():
+        output_raster.rio.to_raster(output_raster_path)
+
+
+def gross_error_propagation(input_raster1_path, input_raster2_path, output_raster_path):
+
+    print(f"Processing {input_raster1_path}\n{input_raster2_path}")
+    input_raster1 = rioxarray.open_rasterio(input_raster1_path, chunks=True)
+    input_raster2 = rioxarray.open_rasterio(input_raster2_path, chunks=True)
+    #match the resolution of the two rasters
+    matched_raster = input_raster1.rio.reproject_match(input_raster2)
+    ref_raster = input_raster2
+    
+    #propagate error accoridng to James 2020
+    output_raster = 1.96 * np.sqrt((matched_raster/1000)**2 + (ref_raster/1000)**2)
+    #set the nodata value to 3.3347636e+35
+    output_raster.rio.write_nodata(3.3347636e+35)
+    # Save the transformed raster
+    with ProgressBar():
+        output_raster.rio.to_raster(output_raster_path)
+        
+   
 def raster_pixels_to_points(raster_path, output_csv_path, sample_factor=1):
     """
     Convert raster pixels to points, excluding null, NaN, and no data values,
@@ -210,11 +83,58 @@ def raster_pixels_to_points(raster_path, output_csv_path, sample_factor=1):
     df.to_csv(output_csv_path, index=False)
     print(f"Data saved to {output_csv_path}")
 
-
+#write a function that opens a raster, sets the nodata value to 3.3347636e+35, and saves the raster
+def set_nodata_value(raster_path, output_raster_path = None):
+    if output_raster_path is None:
+        output_raster_path = os.path.join(os.path.dirname(raster_path), os.path.basename(raster_path).split(".")[0] + "_ndv.tif")
+    
+    with rasterio.open(raster_path) as src:
+        data = src.read(1)
+        data[data == src.nodata] = 0
+        data[data >  1e+20] = 0
+        profile = src.profile
+        profile.update(nodata=0)
+        #add another nodata value to the profile
+        with rasterio.open(output_raster_path, 'w', **profile) as dst:
+            dst.write(data, 1)
 
 def main():
-    raster_path = r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Aligned DoDs\DoD 070923 SfM\LM2 070923 SfM Veg Masked\DoD DoD LM2_070923_5cm_veg_masked_QGIS_LM2_081222_5cm_veg_masked_QGIS_nuth_x-0 - LM2_081222_5cm_veg_masked_QGIS.tif"
-    csv_output_path = r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Net Change\DoD Points\LM2 070923 - 081222 DoD veg mask.csv"
-    raster_pixels_to_points(raster_path, csv_output_path)
+
+#     raster_list = [
+#         r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\LM2_2023_pt_prec_070923.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\LPM_Intersection_PA3_RMSE_018_pt_prec_070923.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\MM_all_102023_align60k_intersection_one_checked_pt_prec_070923.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\MPM_2023_090122_REMOVED_pt_prec_070923.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\UM1_2023_pt_prec_070923.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\UM2_2023_pt_prec_070923.tif",   
+#     ]
+    
+#     orig_raster_list = [
+#        r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\LM2_2023_pt_prec_081222.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\LPM_pt_prec_081222.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\MM_pt_prec_090122.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\MPM_pt_prec_090122.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\UM1_2023_pt_prec_071822.tif",
+# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\UM2_pt_prec_071122.tif",
+        
+# #     ]
+    raster_dir = r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Unmasked DoDs\Aligned LIDAR\1m DoDs\Hillslopes"
+    raster_list = glob.glob(raster_dir + "/*.tif")
+    csv_output_dir = os.path.join(raster_dir, "DoD Points")
+    if not os.path.exists(csv_output_dir):
+        os.makedirs(csv_output_dir)
+    
+    #raster_list = []
+    #for raster, orig_raster in zip(raster_list, orig_raster_list):
+    for raster in raster_list:
+        csv_output_path = csv_output_dir + "/" + raster.split("\\")[-1].split(".")[0] + ".csv"
+        print(f"Processing {raster}")
+        raster_pixels_to_points(raster, csv_output_path)
+        
+        #output_raster_name = raster.split("\\")[-1].split(".")[0] + "_error_prop.tif"
+        #output_raster_path = os.path.join(output_folder, output_raster_name)
+        #gross_error_propagation(raster, orig_raster, output_raster_path)
+    
+
 if __name__ == "__main__":
     main()
