@@ -109,7 +109,37 @@ def create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=5
         perpendiculars_gdf.to_file(output_path, driver='GPKG')
     return perpendiculars_gdf
 
-def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, n_segments = 200, window=20):
+def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, segment_spacing = 20, window=20):
+    """
+    Segments a stream polygon into smaller sections using cutting lines perpendicular 
+    to a centerline. The cutting lines are placed at regular intervals along the centerline, 
+    and the polygon is split along these lines.
+
+    Parameters:
+    -----------
+    stream_polygon_path : str
+        Path to the GeoPackage or shapefile containing the stream polygon.
+    
+    centerline_path : str
+        Path to the GeoPackage or shapefile containing the centerline geometry.
+    
+    output_path : str
+        Path to save the segmented polygons as a new GeoPackage or shapefile.
+    
+    segment_spacing : int, optional
+        Width of each segment of the river corridor.
+    
+    window : int, optional
+        The distance in meters to look ahead and behind the interpolation point on 
+        the centerline for averaging the direction of the perpendicular cutting line 
+        (default is 20 meters).
+
+    Returns:
+    --------
+    None
+        The function saves the segmented polygons to the specified output file.
+    """
+    
     # Load the shapefile and the centerline
     gdf = gpd.read_file(stream_polygon_path)
     centerline_gdf = gpd.read_file(centerline_path)
@@ -119,7 +149,7 @@ def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, n_
     centerline = centerline_gdf.geometry[0]
     
     #set n_segments to the length of the centerline
-    n_segments = int(centerline.length / 5)
+    n_segments = int(centerline.length / segment_spacing)
     
     # Calculate interval along the centerline to place cutting points
     line_length = centerline.length
@@ -176,10 +206,14 @@ def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, n_
     segment_gdf.to_file(output_path)
     
 def main():
-    chan_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Test - Slope\LM2 Channel Stats.gpkg"
-    input_dir = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Channels\One Part Polygons"
-    centerline_dir = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Channels\Centerlines"
-    output_segment_dir = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Channels\One Part Polygons\Segmented"
+
+    
+    centerline_dir = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Centerlines"
+    input_dir = r"Y:\ATD\GIS\Bennett\Channel Polygons"
+
+    output_segment_dir = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Perpendiculars"
+    if not os.path.exists(output_segment_dir):
+        os.makedirs(output_segment_dir)
     watersheds = ['LM2', 'LPM', 'MM', 'MPM', 'UM1', 'UM2']
     
     for watershed in watersheds:
@@ -187,20 +221,22 @@ def main():
         for file in os.listdir(input_dir):
             if watershed in file and file.endswith('.gpkg'):
                 input_path = os.path.join(input_dir, file)
+                print(f"Input: {input_path}")
                 break
-        for file in os.listdir(centerline_dir):
-            if watershed in file and file.endswith('.gpkg'):
-                centerline_path = os.path.join(centerline_dir, file)
-                break
+
+        centerline_path = os.path.join(centerline_dir, f'{watershed} centerline.gpkg')
         output_segment_path = os.path.join(output_segment_dir, f'{watershed}_channel_segmented.gpkg')
         print(f"Processing watershed: {watershed}")
-        print(f"Input: {input_path}")
+        
         print(f"Centerline: {centerline_path}")
         print(f"Output: {output_segment_path}\n")
         #create_centerline(input_path, centerline_path)
-        # multipolygon_to_polygon(chan_path, output_path)
-        segment_stream_polygon(input_path, centerline_path, output_segment_path)
-        #create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=1, window=1)
+        #multipolygon_to_polygon(chan_path, output_path)
+        #segment_stream_polygon(input_path, centerline_path, output_segment_path, segment_spacing = 20)
+        perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=500, window=10)
+        
+        out_perp_path = os.path.join(output_segment_dir, f'{watershed}_perpendicular.gpkg')
+        perp_lines.to_file(out_perp_path, driver='GPKG')
     
 if __name__ == '__main__':
     main()

@@ -1,6 +1,6 @@
 import geopandas as gpd
 from shapely.geometry import Polygon,MultiPolygon
-from shapely.ops import unary_union, cascaded_union
+from shapely.ops import unary_union
 from shapely.geometry import box
 from shapely.geometry import LineString, MultiLineString
 import numpy as np
@@ -196,11 +196,16 @@ def main():
     section_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Test - Slope\LM2 Centerline_shapely_buffered_multipolygon.gpkg"
     buffer_outline_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Watershed Stats\Test - Slope\Buffer as Lines\Buffer outline.gpkg"
     
-    
+    input_gpkg = r"Y:\ATD\GIS\Bennett\Valley Widths\Bennett_Valley_Final_dissolved.gpkg"
+    output_gpkg = r"Y:\ATD\GIS\Bennett\Valley Widths\Bennett_Valley_Final_clip.gpkg"
+    clip_gpkg = r"Y:\ATD\GIS\Bennett\Bennett_watersheds.gpkg"
+    #multipolygon_to_polygon(input_gpkg, output_gpkg)
+    clipped_gdf = clip(gpd.read_file(input_gpkg), gpd.read_file(clip_gpkg))
+    clipped_gdf.to_file(output_gpkg, driver='GPKG')
     
     #multi_poly_path = centerline_to_multipolygon(buffer_path, CL_path, length=10, width=200)
-    buffer_gdf = gpd.read_file(buffer_outline_path)
-    perp_gdf = gpd.read_file(perp_path)
+    # buffer_gdf = gpd.read_file(buffer_outline_path)
+    # perp_gdf = gpd.read_file(perp_path)
     #clipped_gdf  = clip(perp_gdf, buffer_gdf)
     #clipped_gdf.to_file(output_path, driver='GPKG')
 
