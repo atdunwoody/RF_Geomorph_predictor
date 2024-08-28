@@ -4,6 +4,7 @@ import geopandas as gpd
 import rioxarray
 import os
 import multiprocessing as mp
+from tqdm import tqdm
 
 input_folders = [
             r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2021",
@@ -17,8 +18,7 @@ output_folders = [
 ]
 
 MRMS_prefix = "PrecipFlag_00.00_"
-# MRMS_prefix = 'MultiSensor_QPE_01H_Pass2_00.00_'
-# Load the shapefile once, outside the loop
+
 shapefile = r"Y:\ATD\GIS\MRMS_Data\ETF_Bennett_Boundaries.gpkg"
 gdf = gpd.read_file(shapefile)
 total_bounds = gdf.total_bounds
@@ -52,27 +52,26 @@ def process_file(file_paths):
     output_file_name = decompressed_file_path.replace(MRMS_prefix, 'Clipped_').replace('.grib2', '.tif')
     output_file_path = os.path.join(output_folder_path, output_file_name)
     if os.path.exists(output_file_path):
-        print(f"File {output_file_path} already exists, skipping.")
-        return False
-    
+        return f"File {output_file_path} already exists, skipping."
+
     # Decompress the file
     decompress_grib_gz(input_file_path, decompressed_file_path)
 
     # Load the GRIB2 file using xarray with cfgrib engine
     data = xr.open_dataset(decompressed_file_path, engine='cfgrib', chunks={'time': 10})
-    data = modify_MRMS_crs(data)
+    #data = modify_MRMS_crs(data)
 
     # Clip data to the geopackage bounds
     clipped_data = clip_data_to_geopackage(data)
 
     # Write clipped data to TIFF
-
     clipped_data.rio.to_raster(output_file_path, driver='GTiff')    
 
     # Clean up memory
     del data
     del clipped_data
 
+    return f"Processed {output_file_path}"
 
 if __name__ == "__main__":
     # Create output folders if they don't exist
@@ -86,6 +85,8 @@ if __name__ == "__main__":
         file_names = [f for f in os.listdir(input_folder_path) if f.endswith('.gz')]
         files_to_process.extend([(input_folder_path, output_folder_path, file_name) for file_name in file_names])
 
-    # Use multiprocessing to process files in parallel
+    print(f"Processing {len(files_to_process)} files...")
+    # Use multiprocessing to process files in parallel with a progress bar
     with mp.Pool(mp.cpu_count()) as pool:
-        pool.map(process_file, files_to_process)
+        for result in tqdm(pool.imap(process_file, files_to_process), total=len(files_to_process)):
+            print(result)

@@ -34,10 +34,10 @@ def aggregate_precipitation_data_dask(directory, output_dir, start_time, end_tim
     # Trigger computation and save the results
     running_total_last = running_total.isel(time=-1).compute()  # compute the result
     running_total_time = datetime.now()
-    print(f"Time after running total: {running_total_time - concat_time}")
+    print(f"Time to aggregate running total: {running_total_time - concat_time}")
     max_60min_intensity_max = max_60min_intensity.max(dim='time').compute()  # compute the result
     max_int_time = datetime.now()
-    print(f"Time after max intensity: {max_int_time - running_total_time}")
+    print(f"Time to aggregate max intensity: {max_int_time - running_total_time}")
     
     running_total_last.rio.to_raster(os.path.join(output_dir, f'running_total_{start_time.strftime("%m%d%y")}_to_{end_time.strftime("%m%d%y")}.tif'))
     max_60min_intensity_max.rio.to_raster(os.path.join(output_dir, f'max_60min_intensity_{start_time.strftime("%m%d%y")}_to_{end_time.strftime("%m%d%y")}.tif'))
