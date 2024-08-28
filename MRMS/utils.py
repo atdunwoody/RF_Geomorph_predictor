@@ -99,6 +99,7 @@ def get_file_paths(directory, start_time, end_time, ext = '.tif'):
     # Sort files by the extracted time from filenames
     files.sort(key=lambda x: datetime.strptime(x.split('_')[-1][:15], '%Y%m%d-%H%M%S'))
     return files
+
 def compress_grib(input_filepath, output_filepath):
     """
     Compress a GRIB file into a .grib.gz file.
@@ -121,6 +122,7 @@ def decompress_grib_gz(file_path, output_path):
     with gzip.open(file_path, 'rb') as f_in:
         with open(output_path, 'wb') as f_out:
             f_out.write(f_in.read())
+    return output_path
 
 def modify_MRMS_crs(data, crs = "epsg:4326"):
     """
@@ -160,3 +162,15 @@ def save_xarray_to_netcdf(data, output_path):
     """Save an xarray DataArray to a NetCDF file."""
     data.to_netcdf(output_path)
     print(f"Data saved to {output_path}")
+    
+def main():
+    # decompress and MRMS file, open it,and get it's CRS
+    MRMS_gz = r"Y:\ATD\GIS\Bennett\Precipitation\MultiSensor_QPE_01H_Pass2_00.00_20201013-190000.grib2.gz"
+    MRMS = r"Y:\ATD\GIS\Bennett\Precipitation\MultiSensor_QPE_01H_Pass2_00.00_20201013-190000.grib2"
+    decompress_grib_gz(MRMS_gz, MRMS)
+    data = xr.open_rasterio(MRMS)
+    crs = data.rio.crs
+    print(crs)
+    
+if __name__ == "__main__":
+    main()

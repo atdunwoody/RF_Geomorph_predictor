@@ -1,7 +1,6 @@
 """
 Samples an input raster along a line geometry and plots the distance vs raster value.
-If a polygon is provided, the intersection points between the line and the polygon are marked on the plot.
-    
+If a polygon is provided, the intersection points between the line and the polygon are marked on the plot. 
 """
 
 import geopandas as gpd

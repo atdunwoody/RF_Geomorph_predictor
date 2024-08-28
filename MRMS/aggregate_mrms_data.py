@@ -119,10 +119,10 @@ def create_max_value_raster(raster_files, output_raster):
 directory = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\From Megan\2min_rasters"
 output_dir = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Precipitation"
 
-start_end_times =[[datetime(2022, 5, 1, 0, 0), datetime(2022, 7, 9, 0, 0)],
-                    [datetime(2022, 7, 10, 0, 0), datetime(2022, 10, 31, 0, 0)],
-                    [datetime(2023, 5, 1, 0, 0), datetime(2023, 7, 9, 0, 0)],
-                    [datetime(2023, 7, 10, 0, 0), datetime(2023, 10, 31, 0, 0)],
+start_end_times =[[datetime(2022, 5, 1, 0, 0), datetime(2022, 7, 9, 23, 0)],
+                    [datetime(2022, 7, 10, 0, 0), datetime(2022, 10, 31, 23, 0)],
+                    [datetime(2023, 5, 1, 0, 0), datetime(2023, 7, 9, 23, 0)],
+                    [datetime(2023, 7, 10, 0, 0), datetime(2023, 10, 31, 23, 0)],
                     ]
 
 for start_time, end_time in start_end_times:

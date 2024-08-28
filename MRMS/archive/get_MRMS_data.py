@@ -65,7 +65,10 @@ def read_grib2_file(filepath):
     grbs.close()
 
 if __name__ == '__main__':
-    start_date = '2020-10-13'
-    end_date = '2020-12-31'
-    download_dir = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Precipitation\MRMS Data\2020_Multi_QPE"
-    main(start_date, end_date, download_dir)
+    
+    years = [2021, 2022, 2023]
+    for year in years:
+        start_date = f'{year}-1-01'
+        end_date = f'{year}-12-31'
+        download_dir = os.path.join(r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Precipitation\MRMS Data", year)
+        main(start_date, end_date, download_dir)
