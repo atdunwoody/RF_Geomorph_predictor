@@ -65,7 +65,7 @@ def process_file(file_paths):
             temp_file.write(f_in.read())
             temp_file_path = temp_file.name
 
-        data = xr.open_dataset(temp_file_path, engine='cfgrib', chunks={'time': 50000})
+        data = xr.open_dataset(temp_file_path, engine='cfgrib', chunks={'time': 1000})
         data = modify_MRMS_crs(data)
         clipped_data = clip_data_to_geopackage(data)
 
@@ -76,7 +76,7 @@ def process_file(file_paths):
         logging.error(f"Error processing file {file_name}: {e}", exc_info=True)
         return None
 
-def save_data_in_chunks(all_data, output_path, year, chunk_size=50000):
+def save_data_in_chunks(all_data, output_path, year, chunk_size=1000):
     """Save accumulated data to a NetCDF file in chunks."""
     combined_data = xr.concat(all_data, dim='time')
     combined_data.to_netcdf(output_path,

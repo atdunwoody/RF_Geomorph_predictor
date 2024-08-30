@@ -8,14 +8,16 @@ from tqdm import tqdm
 import gzip
 
 input_folders = [
-    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2021",
-    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2022",
-    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2023",
+    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2020",
+    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2021",
+    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2022",
+    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2023",
 ]
 output_folders = [
-    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag Clipped\2021",
-    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag Clipped\2022",
-    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag Clipped\2023"
+    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag Clipped USA\2020",
+    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag Clipped\2021",
+    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag Clipped\2022",
+    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag Clipped\2023"
 ]
 
 MRMS_prefix = "PrecipFlag_00.00_"

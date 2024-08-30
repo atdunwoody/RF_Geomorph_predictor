@@ -19,10 +19,10 @@ logging.basicConfig(
 
 # Input folders containing the GRIB2 files compressed as .gz, organized by year
 input_folders = [
-    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2020",
-    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2021",
-    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2022",
-    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2023",
+    # r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2020",
+    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2021",
+    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2022",
+    r"Y:\ATD\GIS\MRMS_Data\MRMS PrecipFlag USA\2023",
 ]
 
 # Output folder where the final NetCDF files will be saved
@@ -93,7 +93,7 @@ def process_file(file_paths):
                 temp_file_path = temp_file.name
 
         # Load the decompressed data from the temporary file as an xarray DataArray using the cfgrib engine
-        data = xr.open_dataset(temp_file_path, engine='cfgrib', chunks={'time': 100})
+        data = xr.open_dataset(temp_file_path, engine='cfgrib', chunks={'time': 1000})
 
         # Modify the CRS to ensure proper alignment
         data = modify_MRMS_crs(data)
