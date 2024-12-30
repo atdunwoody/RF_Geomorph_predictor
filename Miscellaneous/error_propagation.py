@@ -98,42 +98,100 @@ def set_nodata_value(raster_path, output_raster_path = None):
         with rasterio.open(output_raster_path, 'w', **profile) as dst:
             dst.write(data, 1)
 
+import rioxarray
+
+def threshold_by_error(
+    input_raster_path: str,
+    error_raster_path: str,
+    output_raster_path: str
+) -> None:
+    """
+    Thresholds the input_raster by an error_raster. The error_raster is first
+    reprojected/matched to the input_raster using rioxarray. Pixels in the
+    input_raster are kept if input_raster <= error_raster_matched; otherwise, 
+    those pixels are set to NaN.
+
+    Parameters
+    ----------
+    input_raster_path : str
+        File path to the input raster to be thresholded.
+    error_raster_path : str
+        File path to the error raster used for thresholding.
+    output_raster_path : str
+        File path where the thresholded raster will be saved.
+    """
+
+    # Read in the input raster
+    input_da = rioxarray.open_rasterio(input_raster_path, masked=True)
+
+    # Read in the error raster
+    error_da = rioxarray.open_rasterio(error_raster_path, masked=True)
+
+    # Match the error raster to the input raster’s coordinate reference system (CRS),
+    # resolution, and extent
+    error_matched = error_da.rio.reproject_match(input_da)
+
+    # Perform the thresholding
+    thresholded_da = input_da.where(input_da <= error_matched)
+
+    # Save the thresholded result to a new raster
+    thresholded_da.rio.to_raster(output_raster_path)
+
+def threshold_by_error_lists(
+    input_raster_paths: list,
+    error_raster_paths: list,
+    output_raster_folder: str
+) -> None:
+    """
+    Thresholds a list of input rasters by a list of error rasters. The error
+    rasters are first reprojected/matched to the input rasters using rioxarray.
+    Pixels in the input rasters are kept if input_raster <= error_raster_matched;
+    otherwise, those pixels are set to NaN.
+
+    Parameters
+    ----------
+    input_raster_paths : list
+        List of file paths to the input rasters to be thresholded.
+    error_raster_paths : list
+        List of file paths to the error rasters used for thresholding.
+    output_raster_folder : str
+        Folder path where the thresholded rasters will be saved.
+    """
+
+    for input_raster_path, error_raster_path in zip(input_raster_paths, error_raster_paths):
+        # Create the output raster path
+        output_raster_path = os.path.join(
+            output_raster_folder,
+            os.path.basename(input_raster_path).split(".")[0] + "_gross_error_thresh.tif"
+        )
+        print(f"Processing:\n{error_raster_path}\n{input_raster_path}")
+        # Threshold the input raster by the error raster
+        threshold_by_error(input_raster_path, error_raster_path, output_raster_path)
+        print(f"Output saved to:\n{output_raster_path}")
+
 def main():
 
-#     raster_list = [
-#         r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\LM2_2023_pt_prec_070923.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\LPM_Intersection_PA3_RMSE_018_pt_prec_070923.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\MM_all_102023_align60k_intersection_one_checked_pt_prec_070923.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\MPM_2023_090122_REMOVED_pt_prec_070923.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\UM1_2023_pt_prec_070923.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\UM2_2023_pt_prec_070923.tif",   
-#     ]
+    error_raster_list = [
+        r"Y:\ATD\GIS\Bennett\DoDs\Error\Gross Change\Krigged SfM Covariance\Propagated Error\ME_error_propagated.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Error\Gross Change\Krigged SfM Covariance\Propagated Error\MM_error_propagated.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Error\Gross Change\Krigged SfM Covariance\Propagated Error\MW_error_propagated.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Error\Gross Change\Krigged SfM Covariance\Propagated Error\UE_error_propagated.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Error\Gross Change\Krigged SfM Covariance\Propagated Error\UM_error_propagated.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Error\Gross Change\Krigged SfM Covariance\Propagated Error\UW_error_propagated.tif",
+        ]
     
-#     orig_raster_list = [
-#        r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\LM2_2023_pt_prec_081222.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\LPM_pt_prec_081222.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\MM_pt_prec_090122.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\MPM_pt_prec_090122.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\UM1_2023_pt_prec_071822.tif",
-# # r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Error\Gross Change\Krigged SfM Covariance\Point precision Metashape\Error krig at native res\UM2_pt_prec_071122.tif",
-        
-# #     ]
-    raster_dir = r"Y:\ATD\Drone Data Processing\Sediment Budgets\ETF\Unmasked DoDs\Aligned LIDAR\1m DoDs\Hillslopes"
-    raster_list = glob.glob(raster_dir + "/*.tif")
-    csv_output_dir = os.path.join(raster_dir, "DoD Points")
-    if not os.path.exists(csv_output_dir):
-        os.makedirs(csv_output_dir)
+    veg_mask_raster_list = [
+        r"Y:\ATD\GIS\Bennett\DoDs\Masked DoDs\SfM 2023-2022\ME 062023 - 060222 DoD 0,05m_veg_masked.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Masked DoDs\SfM 2023-2022\MM 062023 - 052022 DoD 0,05m_veg_masked.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Masked DoDs\SfM 2023-2022\MW 062023 - 052022 DoD 0,05m ndv_veg_masked.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Masked DoDs\SfM 2023-2022\UE 062023-062022 DoD 0,05m_veg_masked.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Masked DoDs\SfM 2023-2022\UM 062023-062022 DoD 0,05m_veg_masked.tif",
+        r"Y:\ATD\GIS\Bennett\DoDs\Masked DoDs\SfM 2023-2022\UW 062023-062022 DoD 0,05m_veg_masked.tif",
+        ]
     
-    #raster_list = []
-    #for raster, orig_raster in zip(raster_list, orig_raster_list):
-    for raster in raster_list:
-        csv_output_path = csv_output_dir + "/" + raster.split("\\")[-1].split(".")[0] + ".csv"
-        print(f"Processing {raster}")
-        raster_pixels_to_points(raster, csv_output_path)
-        
-        #output_raster_name = raster.split("\\")[-1].split(".")[0] + "_error_prop.tif"
-        #output_raster_path = os.path.join(output_folder, output_raster_name)
-        #gross_error_propagation(raster, orig_raster, output_raster_path)
+    output_folder= r"Y:\ATD\GIS\Bennett\DoDs\Masked DoDs Gross Error Thresh\SfM 2023-2022"
+    
+    threshold_by_error_lists(veg_mask_raster_list, error_raster_list, output_folder)
     
 
 if __name__ == "__main__":

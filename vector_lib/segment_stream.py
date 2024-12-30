@@ -7,6 +7,7 @@ from rasterio.features import rasterize
 from skimage.morphology import skeletonize
 from geoprocessing_tools import multipolygon_to_polygon
 import os
+from tqdm import tqdm
 
 def create_centerline(polygon_file, output_CL_file):
     """Process each polygon in the GeoPackage to create centerlines and save them."""
@@ -109,7 +110,7 @@ def create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=5
         perpendiculars_gdf.to_file(output_path, driver='GPKG')
     return perpendiculars_gdf
 
-def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, segment_spacing = 20, window=20):
+def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, segment_spacing=20, window=100, scaling_factor=100):
     """
     Segments a stream polygon into smaller sections using cutting lines perpendicular 
     to a centerline. The cutting lines are placed at regular intervals along the centerline, 
@@ -139,7 +140,7 @@ def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, se
     None
         The function saves the segmented polygons to the specified output file.
     """
-    
+    print(f"Segmenting stream polygon: {stream_polygon_path}")
     # Load the shapefile and the centerline
     gdf = gpd.read_file(stream_polygon_path)
     centerline_gdf = gpd.read_file(centerline_path)
@@ -148,18 +149,18 @@ def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, se
     polygon = gdf.geometry[0]
     centerline = centerline_gdf.geometry[0]
     
-    #set n_segments to the length of the centerline
+    # Set n_segments to the length of the centerline
     n_segments = int(centerline.length / segment_spacing)
-    
+    print(f"Segmenting into {n_segments} segments")
     # Calculate interval along the centerline to place cutting points
     line_length = centerline.length
     interval = line_length / n_segments
     
-    
     # Initialize list to store cutting lines
     cutting_lines = []
     
-    for i in range(1, n_segments):
+    # tqdm progress bar added here
+    for i in tqdm(range(1, n_segments), desc="Creating cutting lines"):
         # Calculate the primary interpolation point
         point = centerline.interpolate(i * interval)
 
@@ -177,19 +178,19 @@ def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, se
         
         # Compute the perpendicular vector
         length_vector = np.sqrt(dx_avg**2 + dy_avg**2)
-        perp_dx = -dy_avg / length_vector
-        perp_dy = dx_avg / length_vector
+        perp_dx = -dy_avg / length_vector * scaling_factor
+        perp_dy = dx_avg / length_vector * scaling_factor
         
         # Define a long perpendicular line for cutting
-        start_point = Point(point.x + perp_dx * 1000, point.y + perp_dy * 1000)
-        end_point = Point(point.x - perp_dx * 1000, point.y - perp_dy * 1000)
+        start_point = Point(point.x + perp_dx, point.y + perp_dy)
+        end_point = Point(point.x - perp_dx, point.y - perp_dy)
         cutting_lines.append(LineString([start_point, end_point]))
     
     # Initial set of segments
     segments = [polygon]
 
-    # Split the polygon with each line
-    for line in cutting_lines:
+    # tqdm progress bar added here for splitting the polygon
+    for line in tqdm(cutting_lines, desc="Splitting polygons"):
         new_segments = []
         for segment in segments:
             split_result = split(segment, line)
@@ -204,28 +205,26 @@ def segment_stream_polygon(stream_polygon_path, centerline_path, output_path, se
 
     # Save to a new shapefile
     segment_gdf.to_file(output_path)
-    
-def main():
 
-    
-    centerline_dir = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Centerlines"
-    input_dir = r"Y:\ATD\GIS\Bennett\Channel Polygons"
+def segment_channel_directory(centerline_dir, channel_poly_dir, output_segments_dir):
+    # centerline_dir = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Centerlines"
+    # input_dir = r"Y:\ATD\GIS\Bennett\Channel Polygons"
 
-    output_segment_dir = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Perpendiculars"
-    if not os.path.exists(output_segment_dir):
-        os.makedirs(output_segment_dir)
+    # output_segment_dir = r"Y:\ATD\GIS\ETF\Watershed Stats\Channels\Perpendiculars"
+    if not os.path.exists(output_segments_dir):
+        os.makedirs(output_segments_dir)
     watersheds = ['LM2', 'LPM', 'MM', 'MPM', 'UM1', 'UM2']
     
     for watershed in watersheds:
         #search for right raster by matching the watershed name
-        for file in os.listdir(input_dir):
+        for file in os.listdir(channel_poly_dir):
             if watershed in file and file.endswith('.gpkg'):
-                input_path = os.path.join(input_dir, file)
+                input_path = os.path.join(channel_poly_dir, file)
                 print(f"Input: {input_path}")
                 break
 
         centerline_path = os.path.join(centerline_dir, f'{watershed} centerline.gpkg')
-        output_segment_path = os.path.join(output_segment_dir, f'{watershed}_channel_segmented.gpkg')
+        output_segment_path = os.path.join(output_segments_dir, f'{watershed}_channel_segmented.gpkg')
         print(f"Processing watershed: {watershed}")
         
         print(f"Centerline: {centerline_path}")
@@ -235,8 +234,17 @@ def main():
         #segment_stream_polygon(input_path, centerline_path, output_segment_path, segment_spacing = 20)
         perp_lines = create_smooth_perpendicular_lines(centerline_path, line_length=60, spacing=500, window=10)
         
-        out_perp_path = os.path.join(output_segment_dir, f'{watershed}_perpendicular.gpkg')
+        out_perp_path = os.path.join(output_segments_dir, f'{watershed}_perpendicular.gpkg')
         perp_lines.to_file(out_perp_path, driver='GPKG')
+
+def main():
+
+    input_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leving Test\Bennett_Centerlines_EPSG26913_buffered.gpkg"
+    centerline_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Channel Polygons\Centerlines_LSDTopo\Bennett_Centerlines_EPSG26913_single.gpkg"
+    output_segment_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leving Test\Bennett_Centerlines_EPSG26913_5m.gpkg"
+    output_perp_path = r"Y:\ATD\GIS\Bennett\Valley Widths\Valley_Footprints\Hydraulic Model\Depth Leving Test\Bennett_Centerlines_EPSG26913_perpendiculars.gpkg"
+    create_smooth_perpendicular_lines(centerline_path, line_length=110, spacing=5, window=100, output_path=output_perp_path)
+    #segment_stream_polygon(input_path, centerline_path, output_segment_path, segment_spacing = 5, scaling_factor=120)
     
 if __name__ == '__main__':
     main()

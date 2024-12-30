@@ -1,25 +1,21 @@
 import os 
 
-DEM_path = r"Y:\ATD\Drone Data Processing\Exports\East_Troublesome\LIDAR\Reprojected to UTM Zone 13N\ET_merged_LIDAR_2020_1m_DEM_reproj.tif"
-DoD_dir = r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked"
-error_DoD_dir = r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\Vegetation Masked\Error Thresholded_10cm"
-SfM_DoD_dir = r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923 SfM"
-flow_accum_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Terrain Feature Rasters\Flow Accumulation.tif"
-slope_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Terrain Feature Rasters\Slope.tif"
-aspect_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Terrain Feature Rasters\Aspect.tif"
-dNBR_path = r"Y:\ATD\GIS\East_Troublesome\Watershed Statistical Analysis\Other Features\dnbr_20200904_20210907.tif"
-classification_dir = r"Y:\ATD\DEM_Alignment\East_Troublesome_Alignment\DoD 070923\RF Land Cover Classifications"
+mi60_raster = r"Y:\ATD\GIS\MRMS_Data\Summary Data\20230709-20220812\MRMS_MI60_20220812-20230709_UTM.tif"
+dem_raster = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\ET_low_LIDAR_2020_1m_DEM.tif"
+flow_accumulation_raster = r"Y:\ATD\GIS\ETF\DEMs\LIDAR\OT 2020\WBT_Outputs_Low\flow_accumulation.tif"
+sbs_raster = r"Y:\ATD\GIS\ETF\dNBR\east_troublesome_co4020310623920201014_sbs.tif"
+land_cover_raster = r"Y:\ATD\GIS\ETF\Vegetation Filtering\LM2\LM2_081222\RF_Results\Stitched_Classification.tif"
+DoD_raster = r"Y:\ATD\GIS\ETF\DEMs\SfM\LM2\LM2_2023 Exports\DoD\DoD DoD LM2_2023____070923_PostError_PCFiltered_DEM - LM2_2023____081222_PostError_PCFiltered_DEM.tif"
+accumulation_raster = r"Y:\ATD\GIS\MRMS_Data\Summary Data\20230709-20220812\MRMS_accum_20220812-20230709_UTM.tif"
 
 field_map = {
-    DEM_path: ['DEM', 'elevation'],
-    DoD_dir: ['net change'],
-    error_DoD_dir: ['erosion', 'deposition', ],
-    SfM_DoD_dir: ['sfm erosion', 'sfm deposition'],
-    flow_accum_path: ['flow'],
-    classification_dir: ['log', 'veg', 'BE'],
-    slope_path: ['slope'],
-    aspect_path: ['aspect'],
-    dNBR_path: ['dNBR']
+    dem_raster: ['DEM', 'elevation'],
+    flow_accumulation_raster: ['flow_accum'],
+    mi60_raster: ['mi60'],
+    accumulation_raster: ['accum_precip'],
+    sbs_raster: ['sbs'],
+    land_cover_raster: ['landcover', 'bare_earth'],
+    DoD_raster: ['net_change', 'erosion', 'deposition']
 }
 
 def build_params(field_name = 'erosion', stats = ['mean'], watershed = 'LM2'):
